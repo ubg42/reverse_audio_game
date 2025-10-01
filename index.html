@@ -5,21 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Reverse Audio — App Style</title>
   <style>
-    body {margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background:#f2f2f7; color:#111; height:100%; display:flex; flex-direction:column;}
-    header {background:#fff; padding:14px; text-align:center; font-weight:600; font-size:17px;
-      border-bottom:1px solid #ddd; position:sticky; top:0;}
+    body {margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#f2f2f7; color:#111; height:100%; display:flex; flex-direction:column;}
+    header {background:#fff; padding:14px; text-align:center; font-weight:600; font-size:17px; border-bottom:1px solid #ddd; position:sticky; top:0;}
     main {flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:20px;}
-    #waveCanvas {width:100%; max-width:360px; height:140px; background:#fff; border-radius:12px;
-      box-shadow:0 1px 4px rgba(0,0,0,0.08); margin:20px 0;}
-    .record-btn {width:90px; height:90px; border-radius:50%; background:#ff3b30; display:flex;
-      align-items:center; justify-content:center; color:#fff; font-size:14px; border:none;
-      box-shadow:0 4px 10px rgba(0,0,0,0.25); cursor:pointer;}
+    #waveCanvas {width:100%; max-width:360px; height:140px; background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); margin:20px 0;}
+    .record-btn {width:90px; height:90px; border-radius:50%; background:#ff3b30; display:flex; align-items:center; justify-content:center; color:#fff; font-size:14px; border:none; box-shadow:0 4px 10px rgba(0,0,0,0.25); cursor:pointer;}
     .controls {display:flex; gap:12px; margin-top:20px; flex-wrap:wrap; justify-content:center;}
-    .controls button {background:#fff; border:none; padding:10px 16px; border-radius:10px; font-size:15px;
-      box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
+    .controls button {background:#fff; border:none; padding:10px 16px; border-radius:10px; font-size:15px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
     .controls button:disabled {opacity:0.4;}
     footer {background:#fff; padding:10px; font-size:12px; color:#666; text-align:center; border-top:1px solid #ddd;}
+    /* Hide controls on mobile by default */
+    @media (max-width: 768px) {
+      .controls {display:none;}
+      .controls.show {display:flex;}
+    }
   </style>
 </head>
 <body>
@@ -28,7 +27,7 @@
     <button id="recordBtn" class="record-btn">Rec</button>
     <canvas id="waveCanvas" width="360" height="140"></canvas>
     <div id="meta">No audio loaded</div>
-    <div class="controls">
+    <div class="controls" id="controls">
       <button id="stopBtn" disabled>Stop</button>
       <button id="playOriginal" disabled>Play</button>
       <button id="playReversed" disabled>Reverse</button>
@@ -40,189 +39,131 @@
   <footer>Everything stays on your device. Audio is processed locally in your browser.</footer>
 
 <script>
-  let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  let mediaRecorder, recordedChunks = [];
-  let originalBuffer = null, reversedBuffer = null;
-  let originalSource = null, reversedSource = null;
-  let gainNode = audioCtx.createGain();
-  gainNode.connect(audioCtx.destination);
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let mediaRecorder, recordedChunks = [];
+let originalBuffer = null, reversedBuffer = null;
+let originalSource = null, reversedSource = null;
+let gainNode = audioCtx.createGain(); gainNode.connect(audioCtx.destination);
+const recordBtn = document.getElementById('recordBtn');
+const stopBtn = document.getElementById('stopBtn');
+const playOriginal = document.getElementById('playOriginal');
+const playReversed = document.getElementById('playReversed');
+const downloadBtn = document.getElementById('downloadBtn');
+const fileInput = document.getElementById('fileInput');
+const fileOpen = document.getElementById('fileOpen');
+const meta = document.getElementById('meta');
+const canvas = document.getElementById('waveCanvas'); const ctx = canvas.getContext('2d');
+const controls = document.getElementById('controls');
 
-  const recordBtn = document.getElementById('recordBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const playOriginal = document.getElementById('playOriginal');
-  const playReversed = document.getElementById('playReversed');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const fileInput = document.getElementById('fileInput');
-  const fileOpen = document.getElementById('fileOpen');
-  const meta = document.getElementById('meta');
-  const canvas = document.getElementById('waveCanvas');
-  const ctx = canvas.getContext('2d');
-
-  // 🔑 Always resume AudioContext on user action
-  function ensureAudioCtx() {
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(err => console.warn("Resume failed:", err));
-    }
+// Toggle controls visibility on mobile when tapping record button
+recordBtn.addEventListener('click', ()=>{
+  if(window.innerWidth <= 768){
+    controls.classList.toggle('show');
   }
+});
 
-  recordBtn.addEventListener('click', async ()=>{
-    ensureAudioCtx();
-    if (mediaRecorder && mediaRecorder.state === 'recording') return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      mediaRecorder = new MediaRecorder(stream);
-      recordedChunks = [];
-      mediaRecorder.ondataavailable = e=>{
-        if(e.data.size>0) recordedChunks.push(e.data)
-      };
-      mediaRecorder.onstop = async ()=>{
-        const blob = new Blob(recordedChunks,{type:'audio/webm'});
-        await loadArrayBuffer(await blob.arrayBuffer());
-        stream.getTracks().forEach(t=>t.stop());
-      };
-      mediaRecorder.start();
-      recordBtn.textContent = 'Rec...';
-      recordBtn.style.background = '#999';
-      stopBtn.disabled = false;
-    }catch(e){
-      alert('Mic access denied')
-    }
-  });
+recordBtn.addEventListener('click', async ()=>{
+  if (mediaRecorder && mediaRecorder.state === 'recording') return;
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRecorder = new MediaRecorder(stream);
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) recordedChunks.push(e.data) };
+    mediaRecorder.onstop = async ()=>{
+      const blob = new Blob(recordedChunks,{type:'audio/webm'});
+      await loadArrayBuffer(await blob.arrayBuffer());
+      stream.getTracks().forEach(t=>t.stop());
+    };
+    mediaRecorder.start();
+    recordBtn.textContent = 'Rec...'; recordBtn.style.background = '#999'; stopBtn.disabled = false;
+  }catch(e){ alert('Mic access denied') }
+});
 
-  stopBtn.addEventListener('click', ()=>{
-    ensureAudioCtx();
-    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-    recordBtn.textContent='Rec';
-    recordBtn.style.background='#ff3b30';
-    stopBtn.disabled = true;
-  });
+stopBtn.addEventListener('click', ()=>{
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  recordBtn.textContent='Rec'; recordBtn.style.background='#ff3b30'; stopBtn.disabled = true;
+});
 
-  fileOpen.addEventListener('click', ()=>{
-    ensureAudioCtx();
-    fileInput.click();
-  });
+fileOpen.addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', async e=>{ if(e.target.files[0]) await handleFile(e.target.files[0]) });
 
-  fileInput.addEventListener('change', async e=>{
-    ensureAudioCtx();
-    if(e.target.files[0]) await handleFile(e.target.files[0])
-  });
+async function handleFile(file){
+  const arr = await file.arrayBuffer();
+  await loadArrayBuffer(arr, file.name);
+}
 
-  async function handleFile(file){
-    const arr = await file.arrayBuffer();
-    await loadArrayBuffer(arr, file.name);
+async function loadArrayBuffer(arrayBuffer, filename='recording'){
+  originalBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+  reversedBuffer = makeReversedBuffer(originalBuffer);
+  meta.textContent = `${filename} — ${Math.round(originalBuffer.duration*10)/10}s`;
+  playOriginal.disabled = false; playReversed.disabled = false; downloadBtn.disabled = false;
+  drawWaveform(originalBuffer);
+}
+
+function makeReversedBuffer(buf){
+  const out = audioCtx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+  for(let ch=0; ch<buf.numberOfChannels; ch++){
+    const inp = buf.getChannelData(ch);
+    const outd = out.getChannelData(ch);
+    for(let i=0;i<buf.length;i++) outd[i] = inp[buf.length-1-i];
   }
+  return out;
+}
 
-  async function loadArrayBuffer(arrayBuffer, filename='recording'){
-    ensureAudioCtx();
-    originalBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
-    reversedBuffer = makeReversedBuffer(originalBuffer);
-    meta.textContent = `${filename} — ${Math.round(originalBuffer.duration*10)/10}s`;
-    playOriginal.disabled = false;
-    playReversed.disabled = false;
-    downloadBtn.disabled = false;
-    drawWaveform(originalBuffer);
+function stopSources(){ [originalSource, reversedSource].forEach(s=>{ if(s){ try{s.stop()}catch(e){} } }); originalSource = reversedSource = null }
+
+playOriginal.addEventListener('click', ()=>{
+  if(!originalBuffer) return; stopSources();
+  originalSource = audioCtx.createBufferSource(); originalSource.buffer = originalBuffer;
+  originalSource.connect(gainNode); originalSource.start();
+});
+
+playReversed.addEventListener('click', ()=>{
+  if(!reversedBuffer) return; stopSources();
+  reversedSource = audioCtx.createBufferSource(); reversedSource.buffer = reversedBuffer;
+  reversedSource.connect(gainNode); reversedSource.start();
+});
+
+function drawWaveform(buffer){
+  const w = canvas.width; const h = canvas.height; ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h);
+  const data = buffer.getChannelData(0);
+  const step = Math.max(1, Math.floor(data.length / w));
+  ctx.strokeStyle = '#007aff'; ctx.beginPath();
+  for(let i=0;i<w;i++){
+    const start = i*step; let min=1,max=-1;
+    for(let j=0;j<step;j++){ const v = data[start+j]; if(v<min) min=v; if(v>max) max=v }
+    const y1 = (1+min)*(h/2); const y2 = (1+max)*(h/2);
+    ctx.moveTo(i,y1); ctx.lineTo(i,y2);
   }
+  ctx.stroke();
+}
 
-  function makeReversedBuffer(buf){
-    const out = audioCtx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
-    for(let ch=0; ch<buf.numberOfChannels; ch++){
-      const inp = buf.getChannelData(ch);
-      const outd = out.getChannelData(ch);
-      for(let i=0;i<buf.length;i++) outd[i] = inp[buf.length-1-i];
-    }
-    return out;
-  }
+function bufferToWav(buffer){
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const bitsPerSample = 16;
+  const blockAlign = numChannels * bitsPerSample/8;
+  const dataLen = buffer.length * blockAlign;
+  const buf = new ArrayBuffer(44 + dataLen);
+  const view = new DataView(buf);
+  let pos = 0;
+  function writeString(s){ for(let i=0;i<s.length;i++) view.setUint8(pos++, s.charCodeAt(i)) }
+  function write16(d){ view.setUint16(pos,d,true); pos+=2 }
+  function write32(d){ view.setUint32(pos,d,true); pos+=4 }
+  writeString('RIFF'); write32(36+dataLen); writeString('WAVE'); writeString('fmt '); write32(16); write16(1); write16(numChannels); write32(sampleRate); write32(sampleRate*blockAlign); write16(blockAlign); write16(bitsPerSample); writeString('data'); write32(dataLen);
+  const channels = []; for(let c=0;c<numChannels;c++) channels.push(buffer.getChannelData(c));
+  for(let i=0;i<buffer.length;i++) for(let c=0;c<numChannels;c++){ let s = Math.max(-1,Math.min(1,channels[c][i])); s = s<0?s*0x8000:s*0x7FFF; view.setInt16(pos,s,true); pos+=2 }
+  return new Blob([buf],{type:'audio/wav'});
+}
 
-  function stopSources(){
-    [originalSource, reversedSource].forEach(s=>{
-      if(s){ try{s.stop()}catch(e){} }
-    });
-    originalSource = reversedSource = null
-  }
-
-  playOriginal.addEventListener('click', ()=>{
-    ensureAudioCtx();
-    if(!originalBuffer) return;
-    stopSources();
-    originalSource = audioCtx.createBufferSource();
-    originalSource.buffer = originalBuffer;
-    originalSource.connect(gainNode);
-    originalSource.start();
-  });
-
-  playReversed.addEventListener('click', ()=>{
-    ensureAudioCtx();
-    if(!reversedBuffer) return;
-    stopSources();
-    reversedSource = audioCtx.createBufferSource();
-    reversedSource.buffer = reversedBuffer;
-    reversedSource.connect(gainNode);
-    reversedSource.start();
-  });
-
-  function drawWaveform(buffer){
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0,0,w,h);
-    const data = buffer.getChannelData(0);
-    const step = Math.max(1, Math.floor(data.length / w));
-    ctx.strokeStyle = '#007aff';
-    ctx.beginPath();
-    for(let i=0;i<w;i++){
-      const start = i*step;
-      let min=1,max=-1;
-      for(let j=0;j<step;j++){
-        const v = data[start+j];
-        if(v<min) min=v;
-        if(v>max) max=v
-      }
-      const y1 = (1+min)*(h/2);
-      const y2 = (1+max)*(h/2);
-      ctx.moveTo(i,y1);
-      ctx.lineTo(i,y2);
-    }
-    ctx.stroke();
-  }
-
-  function bufferToWav(buffer){
-    const numChannels = buffer.numberOfChannels;
-    const sampleRate = buffer.sampleRate;
-    const bitsPerSample = 16;
-    const blockAlign = numChannels * bitsPerSample/8;
-    const dataLen = buffer.length * blockAlign;
-    const buf = new ArrayBuffer(44 + dataLen);
-    const view = new DataView(buf);
-    let pos = 0;
-    function writeString(s){ for(let i=0;i<s.length;i++) view.setUint8(pos++, s.charCodeAt(i)) }
-    function write16(d){ view.setUint16(pos,d,true); pos+=2 }
-    function write32(d){ view.setUint32(pos,d,true); pos+=4 }
-    writeString('RIFF'); write32(36+dataLen); writeString('WAVE');
-    writeString('fmt '); write32(16); write16(1); write16(numChannels);
-    write32(sampleRate); write32(sampleRate*blockAlign); write16(blockAlign); write16(bitsPerSample);
-    writeString('data'); write32(dataLen);
-    const channels = [];
-    for(let c=0;c<numChannels;c++) channels.push(buffer.getChannelData(c));
-    for(let i=0;i<buffer.length;i++) for(let c=0;c<numChannels;c++){
-      let s = Math.max(-1,Math.min(1,channels[c][i]));
-      s = s<0?s*0x8000:s*0x7FFF;
-      view.setInt16(pos,s,true); pos+=2
-    }
-    return new Blob([buf],{type:'audio/wav'});
-  }
-
-  downloadBtn.addEventListener('click', ()=>{
-    ensureAudioCtx();
-    if(!reversedBuffer) return;
-    const wav = bufferToWav(reversedBuffer);
-    const url = URL.createObjectURL(wav);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'reversed.wav';
-    a.click();
-    URL.revokeObjectURL(url);
-  });
+downloadBtn.addEventListener('click', ()=>{
+  if(!reversedBuffer) return;
+  const wav = bufferToWav(reversedBuffer);
+  const url = URL.createObjectURL(wav);
+  const a = document.createElement('a'); a.href = url; a.download = 'reversed.wav'; a.click();
+  URL.revokeObjectURL(url);
+});
 </script>
 </body>
 </html>
