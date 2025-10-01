@@ -1,8 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Reverse Audio — App Style</title>
   <style>
     body {margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#f2f2f7; color:#111; height:100%; display:flex; flex-direction:column;}
@@ -17,51 +17,51 @@
   </style>
 </head>
 <body>
-  <header>Reverse Audio</header>
+  <header>
+    Reverse Audio
+  </header>
   <main>
     <button id="recordBtn" class="record-btn">Rec</button>
     <canvas id="waveCanvas" width="360" height="140"></canvas>
-    <div id="meta">No audio loaded</div>
+    <div id="meta">
+      No audio loaded
+    </div>
     <div class="controls">
-      <button id="stopBtn" disabled>Stop</button>
-      <button id="playOriginal" disabled>Play</button>
-      <button id="playReversed" disabled>Reverse</button>
-      <button id="downloadBtn" disabled>Download</button>
-      <input id="fileInput" type="file" accept="audio/*" style="display:none">
-      <button id="fileOpen">Open File</button>
+      <button id="stopBtn" disabled>Stop</button> <button id="playOriginal" disabled>Play</button> <button id="playReversed" disabled>Reverse</button> <button id="downloadBtn" disabled>Download</button> <input id="fileInput" type="file" accept="audio/*" style="display:none"> <button id="fileOpen">Open File</button>
     </div>
   </main>
-  <footer>Everything stays on your device. Audio is processed locally in your browser.</footer>
+  <footer>
+    Everything stays on your device. Audio is processed locally in your browser.
+  </footer>
+  <script>
+  let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  let mediaRecorder, recordedChunks = [];
+  let originalBuffer = null, reversedBuffer = null;
+  let originalSource = null, reversedSource = null;
+  let gainNode = audioCtx.createGain(); 
+  gainNode.connect(audioCtx.destination);
 
-<script>
-let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let mediaRecorder, recordedChunks = [];
-let originalBuffer = null, reversedBuffer = null;
-let originalSource = null, reversedSource = null;
-let gainNode = audioCtx.createGain(); 
-gainNode.connect(audioCtx.destination);
+  const recordBtn = document.getElementById('recordBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const playOriginal = document.getElementById('playOriginal');
+  const playReversed = document.getElementById('playReversed');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const fileInput = document.getElementById('fileInput');
+  const fileOpen = document.getElementById('fileOpen');
+  const meta = document.getElementById('meta');
+  const canvas = document.getElementById('waveCanvas');
+  const ctx = canvas.getContext('2d');
 
-const recordBtn = document.getElementById('recordBtn');
-const stopBtn = document.getElementById('stopBtn');
-const playOriginal = document.getElementById('playOriginal');
-const playReversed = document.getElementById('playReversed');
-const downloadBtn = document.getElementById('downloadBtn');
-const fileInput = document.getElementById('fileInput');
-const fileOpen = document.getElementById('fileOpen');
-const meta = document.getElementById('meta');
-const canvas = document.getElementById('waveCanvas');
-const ctx = canvas.getContext('2d');
-
-// Safari / iOS fix: resume AudioContext on first user gesture
-async function resumeAudioContext() {
+  // Safari / iOS fix: resume AudioContext on first user gesture
+  async function resumeAudioContext() {
   if (audioCtx.state === 'suspended') {
     try { await audioCtx.resume(); } 
     catch(e){ console.warn("AudioContext resume failed", e); }
   }
-}
+  }
 
-// Recording
-recordBtn.addEventListener('click', async ()=>{
+  // Recording
+  recordBtn.addEventListener('click', async ()=>{
   await resumeAudioContext();
   if (mediaRecorder && mediaRecorder.state === 'recording') return;
   try{
@@ -77,24 +77,24 @@ recordBtn.addEventListener('click', async ()=>{
     mediaRecorder.start();
     recordBtn.textContent = 'Rec...'; recordBtn.style.background = '#999'; stopBtn.disabled = false;
   }catch(e){ alert('Mic access denied') }
-});
+  });
 
-// Stop recording
-stopBtn.addEventListener('click', ()=>{
+  // Stop recording
+  stopBtn.addEventListener('click', ()=>{
   if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
   recordBtn.textContent='Rec'; recordBtn.style.background='#ff3b30'; stopBtn.disabled = true;
-});
+  });
 
-// File input
-fileOpen.addEventListener('click', ()=> fileInput.click());
-fileInput.addEventListener('change', async e=>{ if(e.target.files[0]) await handleFile(e.target.files[0]) });
+  // File input
+  fileOpen.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', async e=>{ if(e.target.files[0]) await handleFile(e.target.files[0]) });
 
-async function handleFile(file){
+  async function handleFile(file){
   const arr = await file.arrayBuffer();
   await loadArrayBuffer(arr, file.name);
-}
+  }
 
-async function loadArrayBuffer(arrayBuffer, filename='recording'){
+  async function loadArrayBuffer(arrayBuffer, filename='recording'){
   originalBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
   reversedBuffer = makeReversedBuffer(originalBuffer);
   meta.textContent = `${filename} — ${Math.round(originalBuffer.duration*10)/10}s`;
@@ -102,9 +102,9 @@ async function loadArrayBuffer(arrayBuffer, filename='recording'){
   playReversed.disabled = false; 
   downloadBtn.disabled = false;
   drawWaveform(originalBuffer);
-}
+  }
 
-function makeReversedBuffer(buf){
+  function makeReversedBuffer(buf){
   const out = audioCtx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
   for(let ch=0; ch<buf.numberOfChannels; ch++){
     const inp = buf.getChannelData(ch);
@@ -112,12 +112,12 @@ function makeReversedBuffer(buf){
     for(let i=0;i<buf.length;i++) outd[i] = inp[buf.length-1-i];
   }
   return out;
-}
+  }
 
-function stopSources(){ [originalSource, reversedSource].forEach(s=>{ if(s){ try{s.stop()}catch(e){} } }); originalSource = reversedSource = null }
+  function stopSources(){ [originalSource, reversedSource].forEach(s=>{ if(s){ try{s.stop()}catch(e){} } }); originalSource = reversedSource = null }
 
-// Play original
-playOriginal.addEventListener('click', async ()=>{
+  // Play original
+  playOriginal.addEventListener('click', async ()=>{
   await resumeAudioContext();
   if(!originalBuffer) return;
   stopSources();
@@ -125,10 +125,10 @@ playOriginal.addEventListener('click', async ()=>{
   originalSource.buffer = originalBuffer;
   originalSource.connect(gainNode);
   originalSource.start();
-});
+  });
 
-// Play reversed
-playReversed.addEventListener('click', async ()=>{
+  // Play reversed
+  playReversed.addEventListener('click', async ()=>{
   await resumeAudioContext();
   if(!reversedBuffer) return;
   stopSources();
@@ -136,10 +136,10 @@ playReversed.addEventListener('click', async ()=>{
   reversedSource.buffer = reversedBuffer;
   reversedSource.connect(gainNode);
   reversedSource.start();
-});
+  });
 
-// Draw waveform
-function drawWaveform(buffer){
+  // Draw waveform
+  function drawWaveform(buffer){
   const w = canvas.width; const h = canvas.height; ctx.clearRect(0,0,w,h);
   ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h);
   const data = buffer.getChannelData(0);
@@ -152,10 +152,10 @@ function drawWaveform(buffer){
     ctx.moveTo(i,y1); ctx.lineTo(i,y2);
   }
   ctx.stroke();
-}
+  }
 
-// Convert buffer to WAV
-function bufferToWav(buffer){
+  // Convert buffer to WAV
+  function bufferToWav(buffer){
   const numChannels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
   const bitsPerSample = 16;
@@ -175,16 +175,16 @@ function bufferToWav(buffer){
     view.setInt16(pos,s,true); pos+=2
   }
   return new Blob([buf],{type:'audio/wav'});
-}
+  }
 
-// Download
-downloadBtn.addEventListener('click', ()=>{
+  // Download
+  downloadBtn.addEventListener('click', ()=>{
   if(!reversedBuffer) return;
   const wav = bufferToWav(reversedBuffer);
   const url = URL.createObjectURL(wav);
   const a = document.createElement('a'); a.href = url; a.download = 'reversed.wav'; a.click();
   URL.revokeObjectURL(url);
-});
-</script>
+  });
+  </script>
 </body>
 </html>
